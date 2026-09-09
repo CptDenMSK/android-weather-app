@@ -32,14 +32,12 @@ jobs:
           sdkmanager --licenses || true
           sdkmanager "build-tools;37.0.0"
 
-      - name: Install Buildozer
-        run: |
-          pip install buildozer
-
       - name: Build APK
         run: |
-          buildozer init
-          buildozer -v android debug
+          python -m venv venv
+          venv/bin/pip install buildozer
+          venv/bin/buildozer init
+          venv/bin/buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
