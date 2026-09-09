@@ -35,6 +35,7 @@ jobs:
 
       - name: Build APK
         run: |
+          pip install cython
           pip install python-for-android
           python -c "from pythonforandroid.entrypoints import main; main()" create --name="WeatherApp" --package="org.example.weatherapp" --version="1.0" --requirements="kivy,requests,avwx,airportsdata,airports" --arch="arm64-v8a" --private="." --output="dist"
 
