@@ -19,7 +19,7 @@ source.include_exts = py,png,jpg,kv,atlas,json
 version = 0.1
 
 # (list) Application requirements
-requirements = python3, kivy, requests, avwx, airportsdata, certifi, charset-normalizer, idna, urllib3, pycairo
+requirements = python3, kivy, requests, airportsdata, certifi, charset-normalizer, idna, urllib3
 
 # (list) Permissions
 android.permissions = INTERNET
