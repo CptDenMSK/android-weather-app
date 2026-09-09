@@ -34,10 +34,10 @@ jobs:
 
       - name: Build APK
         run: |
-          python -m venv venv
-          venv/bin/pip install buildozer
-          venv/bin/buildozer init
-          venv/bin/buildozer -v android debug
+          pip install cython
+          pip install buildozer
+          buildozer init
+          buildozer -v android debug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
