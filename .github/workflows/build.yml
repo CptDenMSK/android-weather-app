@@ -29,7 +29,7 @@ jobs:
 
       - name: Accept licenses
         run: |
-          yes | sdkmanager --licenses
+          yes | sdkmanager --licenses || true
 
       - name: Install Buildozer
         run: |
