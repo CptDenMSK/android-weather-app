@@ -27,6 +27,10 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Accept licenses
+        run: |
+          yes | sdkmanager --licenses
+
       - name: Install Buildozer
         run: |
           pip install buildozer
