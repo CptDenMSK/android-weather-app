@@ -1,51 +1,57 @@
-name: Build Android APK
+[app]
 
-on:
-  push:
-    branches: [ main, master ]
-  workflow_dispatch:
+# (string) Title of your application
+title = Weather App
 
-jobs:
-  build:
-    runs-on: ubuntu-latest
+# (string) Package name
+package.name = weatherapp
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+# (string) Package domain (needed for android package naming)
+package.domain = org.example
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.10'
+# (string) Source code where the main.py live
+source.dir = .
 
-    - name: Install system dependencies
-      run: |
-        # Отключаем сбоящий репозиторий Chrome, чтобы apt update прошёл без ошибок
-        sudo rm -f /etc/apt/sources.list.d/google-chrome.list
-        
-        # Обновляем пакеты, игнорируя возможные единичные сбои репозиториев
-        sudo apt update || true
-        
-        # Устанавливаем только строго необходимые для Buildozer зависимости
-        sudo apt install -y git zip unzip openjdk-17-jdk python3-pip autoconf libtool pkg-config zlib1g-dev libncurses5-dev libssl-dev cmake libffi-dev libgmp-dev
+# (list) Source files to include (let empty to include all the files)
+source.include_exts = py,png,jpg,kv,atlas,json
 
-    - name: Install Buildozer and Cython
-      run: |
-        pip install --upgrade pip
-        pip install buildozer cython virtualenv
+# (string) Application versioning (method 1)
+version = 0.1
 
-    - name: Auto-accept Android SDK Licenses
-      run: |
-        mkdir -p ~/.android
-        touch ~/.android/repositories.cfg
-        yes | sdkmanager --licenses || true
+# (list) Application requirements
+requirements = python3, kivy, requests, avwx, airportsdata, certifi, charset-normalizer, idna, urllib3, pycairo
 
-    - name: Build with Buildozer
-      run: |
-        buildozer -v android debug --yes
+# (list) Permissions
+android.permissions = INTERNET
 
-    - name: Upload APK artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: Android-APK
-        path: bin/*.apk
+# (int) Target Android API, should be as high as possible.
+android.api = 34
+
+# (int) Minimum API your APK will support.
+android.minapi = 21
+
+# (str) Android NDK version to use
+android.ndk = 25b
+
+# (bool) Use --private data directory for storage (True) or public (.kivy)
+android.private_storage = True
+
+android.ndk_path = 
+android.sdk_path = 
+android.skip_update = False
+
+# (bool) If True, then automatically accept SDK license
+android.accept_sdk_license = True
+
+# (str) Android logcat filters to use
+android.logcat_filters = *:S python:D
+
+# (str) Android architecture to build for
+android.archs = arm64-v8a
+
+# (bool) Enable AndroidX support. Required for newer target API
+android.enable_androidx = True
+
+[buildozer]
+log_level = 2
+warn_on_root = 1
