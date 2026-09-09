@@ -2,7 +2,7 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master ]
   workflow_dispatch:
 
 jobs:
@@ -26,10 +26,18 @@ jobs:
     - name: Install Buildozer and Cython
       run: |
         pip install --upgrade pip
-        pip install buildozer "cython<3.0.0" virtualenv
+        pip install buildozer cython virtualenv
+
+    - name: Auto-accept Android SDK Licenses
+      run: |
+        # Принудительно принимаем системные лицензии Android SDK перед запуском Buildozer
+        mkdir -p ~/.android
+        touch ~/.android/repositories.cfg
+        yes | sdkmanager --licenses || true
 
     - name: Build with Buildozer
       run: |
+        # Запуск сборки с флагом автоматического подтверждения
         buildozer -v android debug --yes
 
     - name: Upload APK artifact
