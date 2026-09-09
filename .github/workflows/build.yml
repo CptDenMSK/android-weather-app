@@ -31,6 +31,7 @@ jobs:
         run: |
           sdkmanager --licenses || true
           sdkmanager "build-tools;37.0.0"
+          sdkmanager "platforms;android-33"
 
       - name: Build APK
         run: |
