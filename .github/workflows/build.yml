@@ -24,17 +24,16 @@ jobs:
           pip install airportsdata
           pip install airports-py
 
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
+      - name: Install gradle
+        run: |
+          pip install --upgrade pip
+          pip install p4a
+          pip install buildozer
 
       - name: Accept licenses
         run: |
-          sdkmanager --licenses
           sdkmanager "build-tools;37.0.0"
-
-      - name: Install Buildozer
-        run: |
-          pip install buildozer
+          sdkmanager --licenses
 
       - name: Build APK
         run: |
