@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#172033">
+<title>Airport Weather</title>
+<style>
+* { box-sizing: border-box; }
+body {
+  margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #f2f5f9; color: #172033;
+}
+.app { max-width: 650px; margin: auto; min-height: 100vh; background: white; }
+header { background: #172033; color: white; padding: 22px 18px; }
+header h1 { margin: 0 0 4px; font-size: 24px; }
+header p { margin: 0; opacity: .75; font-size: 14px; }
+.search { display: flex; gap: 8px; padding: 14px; border-bottom: 1px solid #ddd; }
+input {
+  flex: 1; min-width: 0; padding: 13px; font-size: 18px; text-transform: uppercase;
+  border: 1px solid #cbd2dc; border-radius: 9px;
+}
+button {
+  border: 0; border-radius: 9px; padding: 0 18px; background: #2563eb;
+  color: white; font-size: 16px; font-weight: 600;
+}
+.status { padding: 10px 14px; color: #657083; min-height: 38px; }
+.airport { padding: 8px 18px 18px; }
+.airport h2 { margin: 0; font-size: 21px; }
+.tabs { display: flex; border-bottom: 1px solid #ddd; }
+.tab {
+  flex: 1; padding: 13px 5px; background: white; color: #536071;
+  border-radius: 0; border-bottom: 3px solid transparent;
+}
+.tab.active { color: #2563eb; border-bottom-color: #2563eb; }
+.panel { padding: 18px; min-height: 260px; }
+.weather-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.card {
+  background: #f5f7fa; border-radius: 12px; padding: 15px;
+}
+.card .label { color: #6b7482; font-size: 13px; }
+.card .value { margin-top: 5px; font-size: 20px; font-weight: 600; }
+.big-weather { text-align: center; padding: 10px 0 20px; }
+.big-weather .temp { font-size: 48px; font-weight: 700; }
+.big-weather .condition { font-size: 18px; color: #5c6675; }
+pre {
+  white-space: pre-wrap; word-break: break-word; background: #f5f7fa;
+  border-radius: 10px; padding: 15px; line-height: 1.5; min-height: 180px;
+}
+.error { color: #b42318; }
+@media (max-width: 420px) {
+  .weather-grid { grid-template-columns: 1fr; }
+  button { padding: 0 14px; }
+}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.3/papaparse.min.js"></script>
+</head>
+<body>
+<div class="app">
+<header>
+  <h1>✈ Airport Weather</h1>
+  <p>Погода и METAR по ICAO-коду</p>
+</header>
+
+<div class="search">
+  <input id="icao" maxlength="4" placeholder="Например, UUWW" autocomplete="off">
+  <button id="search">Поиск</button>
+</div>
+
+<div id="status" class="status">Введите ICAO-код аэропорта</div>
+<div id="airport" class="airport" style="display:none"></div>
+
+<div class="tabs">
+  <button class="tab active" data-tab="weather">Погода</button>
+  <button class="tab" data-tab="metar">METAR</button>
+  <button class="tab" data-tab="details">Подробно</button>
+</div>
+
+<div id="weather" class="panel">Введите ICAO-код для получения погоды</div>
+<div id="metar" class="panel" style="display:none"></div>
+<div id="details" class="panel" style="display:none"></div>
+</div>
+
+<div style="max-width:650px;margin:auto;padding:10px 18px;color:#8a93a1;font-size:12px;background:#fff;">Данные авиации: Powered by Rotate Pilot</div>
+
+<script>
+const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
+
+let airports = {};
+let airportsLoaded = false;
+let airportsLoadingPromise = null;
+let currentMetar = "";
+
+const FREE_AIRPORT_DB = "https://api.freeairportdb.com/v1/airports";
+
+// Небольшой локальный резерв для часто используемых аэродромов.
+// Это позволяет показать аэропорт даже если внешний справочник временно недоступен.
+const LOCAL_AIRPORTS = {
+  URSS: {name: "Sochi International Airport", city: "Sochi", country: "RU", type: "large_airport", lat: 43.4499, lon: 39.9566},
+  URWA: {name: "Astrakhan Airport", city: "Astrakhan", country: "RU", type: "medium_airport", lat: 46.2833, lon: 48.0063},
+  URKK: {name: "Krasnodar International Airport", city: "Krasnodar", country: "RU", type: "large_airport", lat: 45.0347, lon: 39.1705},
+  URKA: {name: "Anapa Airport", city: "Anapa", country: "RU", type: "medium_airport", lat: 45.0021, lon: 37.3473},
+  UGTB: {name: "Tbilisi International Airport", city: "Tbilisi", country: "GE", type: "large_airport", lat: 41.6692, lon: 44.9547},
+  UBBB: {name: "Heydar Aliyev International Airport", city: "Baku", country: "AZ", type: "large_airport", lat: 40.4675, lon: 50.0467},
+  UUWW: {name: "Vnukovo International Airport", city: "Moscow", country: "RU", type: "large_airport", lat: 55.5915, lon: 37.2615},
+  UUEE: {name: "Sheremetyevo International Airport", city: "Moscow", country: "RU", type: "large_airport", lat: 55.9726, lon: 37.4146},
+  ULLI: {name: "Pulkovo Airport", city: "Saint Petersburg", country: "RU", type: "large_airport", lat: 59.8003, lon: 30.2625}
+};
+
+function normalizeAirport(data, icao) {
+  const raw = data && data.data ? data.data : data;
+  if (!raw) return null;
+  const lat = Number(raw.latitude ?? raw.lat);
+  const lon = Number(raw.longitude ?? raw.lon ?? raw.lng);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return {
+    name: raw.name || icao,
+    city: raw.municipality || raw.city || "",
+    country: raw.country_code || raw.country || "",
+    type: raw.type || "",
+    lat,
+    lon
+  };
+}
+
+async function getAirport(icao) {
+  // Основной источник: FreeAirportDB — база 85,000+ аэропортов.
+  try {
+    const response = await fetch(`${FREE_AIRPORT_DB}/${encodeURIComponent(icao)}`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store"
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const airport = normalizeAirport(data, icao);
+      if (airport) return airport;
+    }
+  } catch (e) {
+    console.warn("FreeAirportDB недоступен:", e);
+  }
+
+  // Второй вариант — поиск по q, если lookup по коду не сработал.
+  try {
+    const response = await fetch(`${FREE_AIRPORT_DB}?q=${encodeURIComponent(icao)}&limit=20`, {
+      headers: { Accept: "application/json" },
+      cache: "no-store"
+    });
+    if (response.ok) {
+      const data = await response.json();
+      const rows = Array.isArray(data?.data) ? data.data : [];
+      const exact = rows.find(row => String(row.icao || row.code || "").toUpperCase() === icao);
+      const airport = normalizeAirport(exact || rows[0], icao);
+      if (airport) return airport;
+    }
+  } catch (e) {
+    console.warn("FreeAirportDB search недоступен:", e);
+  }
+
+  if (LOCAL_AIRPORTS[icao]) return LOCAL_AIRPORTS[icao];
+  throw new Error(`Аэропорт ${icao} не найден`);
+}
+
+async function getWeather(lat, lon) {
+  const params = new URLSearchParams({
+    latitude: lat, longitude: lon,
+    current: "temperature_2m,wind_speed_10m,wind_direction_10m,weather_code,surface_pressure",
+    timezone: "auto"
+  });
+  const response = await fetch(`${OPEN_METEO_URL}?${params}`);
+  if (!response.ok) throw new Error("Ошибка Open-Meteo");
+  const data = await response.json();
+  return data.current;
+}
+
+async function getMetar(icao) {
+  const response = await fetch(
+    `https://rotatepilot.com/api/v1/metar?icao=${encodeURIComponent(icao)}`
+  );
+
+  if (!response.ok) {
+    throw new Error(`METAR недоступен (${response.status})`);
+  }
+
+  const data = await response.json();
+
+  if (!data || !data.raw) {
+    throw new Error("Для этого аэропорта нет актуального METAR");
+  }
+
+  return data;
+}
+
+function weatherText(code) {
+  const codes = {
+    0:"Ясно",1:"Преимущественно ясно",2:"Переменная облачность",3:"Пасмурно",
+    45:"Туман",48:"Иней",51:"Мелкая морось",53:"Морось",55:"Сильная морось",
+    61:"Небольшой дождь",63:"Дождь",65:"Сильный дождь",
+    71:"Небольшой снег",73:"Снег",75:"Сильный снег",80:"Ливневые дожди",
+    95:"Гроза",96:"Гроза с градом",99:"Сильная гроза с градом"
+  };
+  return codes[code] || "Неизвестно";
+}
+
+function decodeMetar(metar) {
+  const info = [];
+  let m;
+  if ((m = metar.match(/(\d{2})(\d{2})(\d{2})Z/)))
+    info.push(`Время (UTC): ${m[1]}-е число, ${m[2]}:${m[3]}`);
+  if ((m = metar.match(/(\d{3})(\d{2})KT/)))
+    info.push(`Ветер: ${m[1]}°, ${m[2]} узлов`);
+  if ((m = metar.match(/\s(\d{4})\s/)))
+    info.push(`Видимость: ${m[1] === "9999" ? "10 км и более" : parseInt(m[1]) + " м"}`);
+  if ((m = metar.match(/(FEW|SCT|BKN|OVC)(\d{3})/))) {
+    const names = {FEW:"Малооблачно",SCT:"Рассеянные",BKN:"Значительная",OVC:"Сплошная"};
+    info.push(`Облачность: ${names[m[1]]} на ${parseInt(m[2])*100} фт`);
+  }
+  if ((m = metar.match(/(\d{2})\/(\d{2})/))) {
+    info.push(`Температура: ${m[1]}°C`);
+    info.push(`Точка росы: ${m[2]}°C`);
+  }
+  if ((m = metar.match(/Q(\d{4})/)))
+    info.push(`QNH: ${m[1]} гПа`);
+  const wx = metar.match(/(-|\+)?(RA|SN|DZ|BR|FG|TS|SH)/);
+  if (wx) {
+    const names = {RA:"Дождь",SN:"Снег",DZ:"Морось",BR:"Дымка",FG:"Туман",TS:"Гроза",SH:"Ливень"};
+    info.push(`Погодные явления: ${names[wx[2]] || wx[2]}`);
+  }
+  return info.join("\n");
+}
+
+async function searchAirport() {
+  const icao = document.getElementById("icao").value.trim().toUpperCase();
+
+  if (!/^[A-Z0-9]{4}$/.test(icao)) {
+    setStatus("Введите корректный 4-буквенный ICAO-код", true);
+    return;
+  }
+
+  setStatus("Получение данных аэропорта…");
+  document.getElementById("airport").style.display = "none";
+  document.getElementById("weather").textContent = "Загрузка…";
+  document.getElementById("metar").textContent = "Загрузка…";
+  document.getElementById("details").textContent = "Загрузка…";
+
+  try {
+    // Координаты берём из большой мировой базы, поэтому не зависим
+    // от маленькой базы API аэропортов. METAR запрашивается отдельно.
+    const ap = await getAirport(icao);
+    let metarData = null;
+    try {
+      setStatus("Аэропорт найден — получение погоды и METAR…");
+      metarData = await getMetar(icao);
+    } catch (metarError) {
+      console.warn("METAR unavailable:", metarError);
+    }
+
+    document.getElementById("airport").innerHTML =
+      `<h2>${escapeHTML(ap.name)}</h2><div>${icao}${ap.city ? " · " + escapeHTML(ap.city) : ""}</div>`;
+    document.getElementById("airport").style.display = "block";
+
+    const weather = await getWeather(ap.lat, ap.lon);
+
+    document.getElementById("weather").innerHTML = `
+      <div class="big-weather">
+        <div class="temp">${weather.temperature_2m}°C</div>
+        <div class="condition">${weatherText(weather.weather_code)}</div>
+      </div>
+      <div class="weather-grid">
+        <div class="card"><div class="label">Ветер</div><div class="value">${weather.wind_speed_10m} км/ч</div></div>
+        <div class="card"><div class="label">Направление</div><div class="value">${weather.wind_direction_10m}°</div></div>
+        <div class="card"><div class="label">QNH</div><div class="value">${weather.surface_pressure} гПа</div></div>
+        <div class="card"><div class="label">ICAO</div><div class="value">${icao}</div></div>
+      </div>`;
+
+    if (metarData && metarData.raw) {
+      const rawMetar = metarData.raw;
+      currentMetar = rawMetar;
+      document.getElementById("metar").innerHTML =
+        `<pre>METAR ${icao}\n${escapeHTML(rawMetar)}</pre>`;
+      document.getElementById("details").innerHTML =
+        `<pre>${escapeHTML(decodeMetar(rawMetar))}</pre>`;
+    } else {
+      document.getElementById("metar").innerHTML =
+        `<div class="error">Для ${icao} сейчас нет доступного METAR.</div>`;
+      document.getElementById("details").innerHTML =
+        `<div class="error">Расшифровка недоступна, потому что METAR не получен.</div>`;
+    }
+
+    setStatus(metarData ? "Данные обновлены" : "Погода обновлена; METAR недоступен");
+  } catch (e) {
+    console.error(e);
+    setStatus(e.message || "Ошибка получения данных", true);
+    document.getElementById("weather").innerHTML =
+      `<div class="error">Не удалось получить данные.<br><small>${escapeHTML(e.message || "")}</small></div>`;
+    document.getElementById("metar").innerHTML =
+      `<div class="error">METAR недоступен</div>`;
+    document.getElementById("details").innerHTML =
+      `<div class="error">Расшифровка недоступна</div>`;
+  }
+}
+
+function setStatus(text, error=false) {
+  const el = document.getElementById("status");
+  el.textContent = text;
+  el.className = "status" + (error ? " error" : "");
+}
+
+function escapeHTML(s) {
+  return String(s).replace(/[&<>"']/g, c => ({
+    "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"
+  }[c]));
+}
+
+document.getElementById("search").addEventListener("click", searchAirport);
+document.getElementById("icao").addEventListener("keydown", e => {
+  if (e.key === "Enter") searchAirport();
+});
+
+document.querySelectorAll(".tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".tab").forEach(x => x.classList.remove("active"));
+    btn.classList.add("active");
+    ["weather","metar","details"].forEach(id => {
+      document.getElementById(id).style.display = id === btn.dataset.tab ? "block" : "none";
+    });
+  });
+});
+
+setStatus("Готово — введите ICAO-код аэропорта");
+</script>
+</body>
+</html>
